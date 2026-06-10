@@ -34,6 +34,8 @@ function kpColor(kp: number, alpha = 1): string {
 }
 
 export class Timeline {
+  /** notified whenever the visible span changes (zoom buttons, wheel, focus) */
+  onViewChange: (() => void) | null = null;
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private viewStart: number;
@@ -118,6 +120,7 @@ export class Timeline {
     this.viewEnd = Math.min(MAX_END, this.viewStart + span);
     this.viewStart = this.viewEnd - span;
     this.dirty = true;
+    this.onViewChange?.();
   }
 
   /** Keep the playhead in view while playing. */
@@ -283,11 +286,41 @@ export class Timeline {
     return out.slice(0, 60);
   }
 
+  /** Current visible span in ms. */
+  get spanMs(): number {
+    return this.viewEnd - this.viewStart;
+  }
+
+  /** Re-center the view on the playhead at the given span (scale buttons). */
+  setSpan(spanMs: number): void {
+    const span = Math.max(MIN_SPAN_MS, Math.min(MAX_END - MAX_START, spanMs));
+    let start = this.clock.timeMs - span / 2;
+    let end = start + span;
+    if (start < MAX_START) {
+      start = MAX_START;
+      end = start + span;
+    }
+    if (end > MAX_END) {
+      end = MAX_END;
+      start = end - span;
+    }
+    this.viewStart = start;
+    this.viewEnd = end;
+    this.dirty = true;
+    this.onViewChange?.();
+  }
+
+  /** Zoom by a factor around the playhead (e.g. 0.5 = in, 2 = out). */
+  zoomBy(factor: number): void {
+    this.setSpan(this.spanMs * factor);
+  }
+
   /** Jump the view to show a time range (used when launching scenarios). */
   focus(t0: number, t1: number): void {
     const pad = (t1 - t0) * 0.15;
     this.viewStart = Math.max(MAX_START, t0 - pad);
     this.viewEnd = Math.min(MAX_END, t1 + pad);
     this.dirty = true;
+    this.onViewChange?.();
   }
 }

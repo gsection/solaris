@@ -175,6 +175,31 @@ html, body {
 #controls { display: flex; align-items: center; gap: 8px; }
 #aurora-source { margin-left: auto; font-size: 11px; letter-spacing: 0.1em; }
 
+#btn-now {
+  color: var(--green);
+  border-color: rgba(26, 255, 140, 0.45);
+  background: rgba(26, 255, 140, 0.07);
+  text-shadow: 0 0 8px rgba(26, 255, 140, 0.6);
+}
+#btn-now:hover {
+  background: rgba(26, 255, 140, 0.18);
+  box-shadow: 0 0 10px rgba(26, 255, 140, 0.35);
+}
+
+.ctl-label {
+  margin-left: 14px;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  opacity: 0.5;
+}
+#btn-zoom-in, #btn-zoom-out { padding: 4px 9px; }
+#span-presets { display: inline-flex; gap: 4px; }
+#span-presets button { padding: 4px 7px; font-size: 11px; }
+#span-presets button.active {
+  background: rgba(0, 229, 255, 0.22);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.35);
+}
+
 button, select {
   font-family: var(--font-mono);
   font-size: 13px;

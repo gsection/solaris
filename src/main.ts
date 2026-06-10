@@ -70,6 +70,39 @@ async function boot(): Promise<void> {
     timeline.focus(Date.now() - 5 * 86400000, Date.now() + 5 * 86400000);
   });
 
+  // ---------------- timeline scale controls ----------------
+  const zoomIn = document.getElementById('btn-zoom-in') as HTMLButtonElement;
+  const zoomOut = document.getElementById('btn-zoom-out') as HTMLButtonElement;
+  zoomIn.addEventListener('click', () => timeline.zoomBy(0.5));
+  zoomOut.addEventListener('click', () => timeline.zoomBy(2));
+
+  const PRESETS: Array<[string, number]> = [
+    ['12H', 12 * 3600000],
+    ['3D', 3 * 86400000],
+    ['1M', 30 * 86400000],
+    ['1Y', 365 * 86400000],
+    ['5Y', 5 * 365 * 86400000],
+    ['ALL', Number.MAX_SAFE_INTEGER], // clamped to the full 1855-2033 range
+  ];
+  const presetWrap = document.getElementById('span-presets')!;
+  const presetButtons: HTMLButtonElement[] = [];
+  for (const [label, span] of PRESETS) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.title = `show ${label === 'ALL' ? 'the full timeline' : label} around the playhead`;
+    b.addEventListener('click', () => timeline.setSpan(span));
+    presetWrap.appendChild(b);
+    presetButtons.push(b);
+  }
+  timeline.onViewChange = () => {
+    for (let i = 0; i < PRESETS.length; i++) {
+      const span = Math.min(PRESETS[i][1], Date.UTC(2033, 0, 1) - Date.UTC(1855, 0, 1));
+      const match = Math.abs(timeline.spanMs - span) / span < 0.12;
+      presetButtons[i].classList.toggle('active', match);
+    }
+  };
+  timeline.onViewChange();
+
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !(e.target instanceof HTMLButtonElement)) {
       e.preventDefault();
