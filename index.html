@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SOLARIS — solar flare & aurora simulator. Historical space weather 2010–present, legendary storms, and forecasts rendered as auroras over a 3D Earth." />
+  <title>SOLARIS // Solar Flare Simulator</title>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="hud">
+    <header id="topbar" class="panel">
+      <div id="title">SOLARIS<span class="dim">&nbsp;//&nbsp;SOLAR FLARE SIMULATOR</span></div>
+      <div id="sim-clock">---------- --:--:-- UTC</div>
+      <div id="mode-badge" class="badge">INIT</div>
+    </header>
+
+    <aside id="panel-left">
+      <section class="panel" id="kp-panel">
+        <h2>GEOMAGNETIC // Kp</h2>
+        <div id="kp-gauge"></div>
+        <div id="kp-readout" class="big-readout">–</div>
+        <div id="kp-storm-label" class="sub-readout"></div>
+      </section>
+      <section class="panel" id="xray-panel">
+        <h2>GOES X-RAY FLUX</h2>
+        <div id="xray-class" class="big-readout">–</div>
+        <div id="xray-flux" class="sub-readout">W/m²</div>
+        <canvas id="xray-trace" width="220" height="48"></canvas>
+      </section>
+      <section class="panel" id="flares-panel">
+        <h2>ACTIVE FLARES</h2>
+        <ul id="flare-list"><li class="dim">no active events</li></ul>
+      </section>
+    </aside>
+
+    <aside id="panel-right">
+      <section class="panel" id="log-panel">
+        <h2>EVENT LOG</h2>
+        <ul id="event-log"></ul>
+      </section>
+      <section class="panel" id="cycle-panel">
+        <h2>SOLAR CYCLE // SSN</h2>
+        <canvas id="cycle-spark" width="240" height="60"></canvas>
+      </section>
+      <section class="panel" id="scenario-panel">
+        <h2>SCENARIOS</h2>
+        <div id="scenario-buttons"></div>
+      </section>
+    </aside>
+
+    <footer id="bottom" class="panel">
+      <canvas id="timeline"></canvas>
+      <div id="controls">
+        <button id="btn-back" title="step back">⏮</button>
+        <button id="btn-play" title="play/pause">▶</button>
+        <button id="btn-fwd" title="step forward">⏭</button>
+        <select id="speed-select" title="playback speed"></select>
+        <button id="btn-now" title="jump to now">NOW</button>
+        <span id="aurora-source" class="dim"></span>
+      </div>
+    </footer>
+  </div>
+
+  <div id="scanlines"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
