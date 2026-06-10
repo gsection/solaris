@@ -3,3 +3,5 @@ dist/
 server/cache/
 scripts/.cache/
 *.log
+
+.claude/
