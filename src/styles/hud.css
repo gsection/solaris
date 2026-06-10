@@ -155,7 +155,8 @@ html, body {
 #cycle-spark { width: 100%; height: 60px; }
 
 #scenario-buttons { display: flex; flex-direction: column; gap: 6px; }
-#scenario-buttons button { width: 100%; text-align: left; }
+#scenario-buttons button { text-align: left; }
+#scenario-buttons > button { width: 100%; } /* the DEACTIVATE row; launch rows are flex-sized */
 
 .dim { opacity: 0.5; }
 
@@ -171,6 +172,7 @@ html, body {
   height: 64px;
   cursor: crosshair;
   display: block;
+  touch-action: none; /* one finger scrubs, two fingers pinch-zoom */
 }
 #controls { display: flex; align-items: center; gap: 8px; }
 #aurora-source { margin-left: auto; font-size: 11px; letter-spacing: 0.1em; }
@@ -210,6 +212,8 @@ button, select {
   cursor: pointer;
   letter-spacing: 0.08em;
   transition: background 0.15s, box-shadow 0.15s;
+  touch-action: manipulation; /* no 300ms double-tap-zoom delay */
+  -webkit-tap-highlight-color: transparent;
 }
 button:hover, select:hover {
   background: rgba(0, 229, 255, 0.16);
@@ -244,4 +248,73 @@ option { background: var(--bg); }
 @media (max-width: 900px) {
   #hud { grid-template-columns: 1fr; grid-template-areas: 'top' '.' 'bottom'; }
   #panel-left, #panel-right { display: none; }
+}
+
+/* ---------- mobile mode (body.mobile set by ui/mobile.ts) ---------- */
+body.mobile #hud {
+  grid-template-columns: 1fr;
+  grid-template-areas: 'top' '.' 'bottom';
+  gap: 8px;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+           max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+body.mobile #panel-left, body.mobile #panel-right { display: none; }
+body.mobile .panel { backdrop-filter: none; } /* too expensive on phone GPUs */
+
+/* top bar: title + badge on row one, full-width clock below */
+body.mobile #topbar { flex-wrap: wrap; gap: 4px 10px; padding: 7px 10px; }
+body.mobile #title { font-size: 14px; }
+body.mobile #title .dim { display: none; }
+body.mobile #mode-badge { order: 1; margin-left: auto; font-size: 9px; letter-spacing: 0.18em; padding: 4px 9px; }
+body.mobile #sim-clock { order: 2; flex-basis: 100%; margin-left: 0; text-align: center; font-size: 13px; }
+
+/* tab bar + bottom sheet holding the desktop side panels */
+#mobile-tabs { display: flex; gap: 6px; }
+#mobile-tabs button {
+  flex: 1;
+  font-family: var(--font-head);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  padding: 11px 0;
+}
+#mobile-tabs button.active {
+  background: rgba(0, 229, 255, 0.22);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.35);
+}
+#mobile-sheet { display: none; }
+#mobile-sheet.open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 38vh;
+  max-height: 38dvh;
+  -webkit-overflow-scrolling: touch;
+}
+#mobile-sheet .panel { flex: none; }
+#mobile-sheet #event-log { max-height: 200px; }
+
+/* touch-sized transport controls */
+body.mobile #bottom { gap: 8px; }
+body.mobile #timeline { height: 56px; }
+body.mobile #controls { flex-wrap: wrap; gap: 6px; }
+body.mobile #controls > button, body.mobile #controls > select {
+  flex: 1 1 auto;
+  min-height: 42px;
+  font-size: 14px;
+  padding: 6px 4px;
+  text-align: center;
+}
+body.mobile #speed-select { flex: 1.6 1 auto; padding-right: 4px; }
+body.mobile .ctl-label,
+body.mobile #btn-zoom-in,
+body.mobile #btn-zoom-out,
+body.mobile #aurora-source { display: none; }
+body.mobile #span-presets { flex-basis: 100%; display: flex; gap: 6px; }
+body.mobile #span-presets button { flex: 1; min-height: 38px; padding: 6px 0; font-size: 12px; }
+
+@media (orientation: landscape) {
+  body.mobile #timeline { height: 40px; }
+  body.mobile #span-presets { flex-basis: auto; } /* presets join the transport row */
+  body.mobile #mobile-sheet.open { max-height: 52vh; max-height: 52dvh; }
 }

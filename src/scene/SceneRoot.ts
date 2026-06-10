@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { latLonToVec3 } from '../astro/geomag';
 import { subsolarPoint } from '../astro/solar';
+import { isMobileDevice } from '../ui/mobile';
 import { Aurora } from './Aurora';
 import { createAtmosphere } from './Atmosphere';
 import { Earth } from './Earth';
@@ -22,7 +23,8 @@ export class SceneRoot {
 
   constructor(canvas: HTMLCanvasElement, dayTex: THREE.Texture, nightTex: THREE.Texture) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // phone GPUs at DPR 3 can't hold 60 fps on the 12-shell aurora stack
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobileDevice() ? 1.5 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
 
     this.scene = new THREE.Scene();

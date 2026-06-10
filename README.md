@@ -25,6 +25,10 @@ Live at **https://solaris.gsection.com**
 - **HUD**: Kp gauge with G-scale storm labels, GOES X-ray flux readout + 6 h trace
   (live data near now, synthesized from flare records elsewhere), active flare list, event log,
   solar-cycle sparkline (observed + predicted SSN), scenario launcher.
+- **Mobile mode**: on touch devices with phone-sized screens the side panels collapse into a
+  tabbed bottom sheet (DATA / LOG / SCENARIOS), transport controls grow to touch size, the
+  timeline gains two-finger pinch-zoom (one finger scrubs), and the render pixel ratio is
+  capped at 1.5 for phone GPUs.
 
 ## Data sources
 

@@ -1,6 +1,6 @@
 // Canvas timeline scrubber: Kp heat-strip, flare tick marks, NOW marker,
 // playhead. Drag to scrub, wheel to zoom (full 1859->2032 range down to hours),
-// shift/middle-drag to pan.
+// shift/middle-drag to pan, two-finger pinch to zoom/pan on touch.
 
 import type { KpProvider } from '../data/KpProvider';
 import type { SimClock } from '../core/SimClock';
@@ -46,6 +46,11 @@ export class Timeline {
   private panRefX = 0;
   private panRefStart = 0;
   private panRefEnd = 0;
+  private pinching = false;
+  private pointers = new Map<number, number>(); // pointerId -> canvas-relative x
+  private pinchRefDist = 0;
+  private pinchRefSpan = 0;
+  private pinchRefMidT = 0;
 
   constructor(
     private clock: SimClock,
@@ -59,10 +64,16 @@ export class Timeline {
 
     this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
     window.addEventListener('pointermove', (e) => this.onPointerMove(e));
-    window.addEventListener('pointerup', () => {
-      this.dragging = false;
-      this.panning = false;
-    });
+    const release = (e: PointerEvent) => {
+      this.pointers.delete(e.pointerId);
+      if (this.pointers.size < 2) this.pinching = false;
+      if (this.pointers.size === 0) {
+        this.dragging = false;
+        this.panning = false;
+      }
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     window.addEventListener('resize', () => (this.dirty = true));
     clock.onChange(() => (this.dirty = true));
@@ -79,7 +90,17 @@ export class Timeline {
   private onPointerDown(e: PointerEvent): void {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    if (e.button === 1 || e.shiftKey) {
+    this.pointers.set(e.pointerId, x);
+    if (this.pointers.size === 2) {
+      // second finger down: switch from scrubbing to pinch-zoom/pan
+      this.dragging = false;
+      this.panning = false;
+      this.pinching = true;
+      const [x1, x2] = [...this.pointers.values()];
+      this.pinchRefDist = Math.max(20, Math.abs(x1 - x2));
+      this.pinchRefSpan = this.viewEnd - this.viewStart;
+      this.pinchRefMidT = this.xToTime((x1 + x2) / 2);
+    } else if (e.button === 1 || e.shiftKey) {
       this.panning = true;
       this.panRefX = x;
       this.panRefStart = this.viewStart;
@@ -92,10 +113,24 @@ export class Timeline {
   }
 
   private onPointerMove(e: PointerEvent): void {
-    if (!this.dragging && !this.panning) return;
+    if (!this.dragging && !this.panning && !this.pinching) return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    if (this.panning) {
+    if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, x);
+    if (this.pinching) {
+      if (this.pointers.size < 2) return;
+      const [x1, x2] = [...this.pointers.values()];
+      const dist = Math.max(20, Math.abs(x1 - x2));
+      let span = this.pinchRefSpan * (this.pinchRefDist / dist);
+      span = Math.max(MIN_SPAN_MS, Math.min(MAX_END - MAX_START, span));
+      // keep the time under the fingers' midpoint pinned -> pinch pans too
+      const frac = (x1 + x2) / 2 / this.canvas.clientWidth;
+      this.viewStart = Math.max(MAX_START, this.pinchRefMidT - span * frac);
+      this.viewEnd = Math.min(MAX_END, this.viewStart + span);
+      this.viewStart = this.viewEnd - span;
+      this.dirty = true;
+      this.onViewChange?.();
+    } else if (this.panning) {
       const span = this.panRefEnd - this.panRefStart;
       const dt = ((this.panRefX - x) / this.canvas.clientWidth) * span;
       this.viewStart = Math.max(MAX_START, this.panRefStart + dt);
@@ -201,12 +236,16 @@ export class Timeline {
     ctx.fillStyle = 'rgba(200,244,255,0.55)';
     ctx.font = '10px "Share Tech Mono", monospace';
     ctx.textBaseline = 'top';
+    let lastLabelEnd = -Infinity; // skip labels that would collide on narrow screens
     for (const { t, label } of this.ticks(span)) {
       const x = this.timeToX(t);
       ctx.fillStyle = 'rgba(0,229,255,0.18)';
       ctx.fillRect(x, stripTop, 1, stripH);
-      ctx.fillStyle = 'rgba(200,244,255,0.6)';
-      ctx.fillText(label, x + 3, h - 11);
+      if (x >= lastLabelEnd + 14) {
+        ctx.fillStyle = 'rgba(200,244,255,0.6)';
+        ctx.fillText(label, x + 3, h - 11);
+        lastLabelEnd = x + 3 + ctx.measureText(label).width;
+      }
     }
 
     // ---- NOW marker ----

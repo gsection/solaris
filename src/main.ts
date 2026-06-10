@@ -15,6 +15,7 @@ import { SCENARIOS } from './data/scenarios';
 import { SceneRoot } from './scene/SceneRoot';
 import { devState, mountDevPanel } from './ui/devPanel';
 import { resolveMode, updateBadge, updateClock } from './ui/hud';
+import { mountMobileUI } from './ui/mobile';
 import { buildScenarioButtons, logEvent, setLiveXray, updatePanels } from './ui/panels';
 import { Timeline } from './ui/Timeline';
 
@@ -42,6 +43,7 @@ async function boot(): Promise<void> {
 
   buildScenarioButtons(provider, clock, timeline);
   mountDevPanel(sceneRoot.aurora);
+  mountMobileUI();
 
   // ---------------- playback controls ----------------
   const btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
