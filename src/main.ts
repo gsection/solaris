@@ -9,15 +9,21 @@ import {
   fetchLiveKp,
   fetchOvation,
   fetchXray,
+  type OvationGrid,
 } from './data/live';
 import { auroraFromKp } from './data/types';
 import { SCENARIOS } from './data/scenarios';
+import { magneticLatDeg } from './astro/geomag';
 import { SceneRoot } from './scene/SceneRoot';
+import { mountDashboard } from './ui/dashboard';
 import { devState, mountDevPanel } from './ui/devPanel';
 import { resolveMode, updateBadge, updateClock } from './ui/hud';
-import { mountMobileUI } from './ui/mobile';
+import { mountMobileUI, type MobileUi } from './ui/mobile';
 import { buildScenarioButtons, logEvent, setLiveXray, updatePanels } from './ui/panels';
 import { Timeline } from './ui/Timeline';
+import { loadStoredLocation, locationFromUrl, requestGeolocation } from './core/location';
+
+export type UiMode = 'now' | 'explore';
 
 async function loadTexture(url: string): Promise<THREE.Texture> {
   return new Promise((resolve, reject) => {
@@ -35,15 +41,89 @@ async function boot(): Promise<void> {
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
   const sceneRoot = new SceneRoot(canvas, dayTex, nightTex);
   // ?t=2024-05-10T22:00:00Z starts the sim at a given moment (testing/sharing)
-  const tParam = new URLSearchParams(location.search).get('t');
+  const params = new URLSearchParams(location.search);
+  const tParam = params.get('t');
   const startMs = tParam ? Date.parse(tParam) : Date.now();
   const clock = new SimClock(Number.isFinite(startMs) ? startMs : Date.now());
   const provider = new KpProvider(archive);
   const timeline = new Timeline(clock, provider);
 
+  // the latest OVATION grid is kept CPU-side for the dashboard's local sampling
+  let ovationGrid: OvationGrid | null = null;
+
   buildScenarioButtons(provider, clock, timeline);
   mountDevPanel(sceneRoot.aurora);
-  mountMobileUI();
+
+  // ---------------- NOW dashboard + location ----------------
+  let mode: UiMode = 'explore'; // setMode below establishes the real initial mode
+
+  const dashboard = mountDashboard({
+    provider,
+    archive,
+    getOvation: () => ovationGrid,
+    onLocationChanged: (loc) => {
+      sceneRoot.setLocationMarker(loc.latDeg, loc.lonDeg);
+      if (mode === 'now') {
+        sceneRoot.focusOnLatLon(loc.latDeg, loc.lonDeg, {
+          tiltDeg: magneticLatDeg(loc.latDeg, loc.lonDeg) >= 0 ? 18 : -18,
+        });
+      }
+      logEvent(clock.timeMs, `LOCATION SET: ${loc.label}`);
+    },
+  });
+  {
+    const loc = dashboard.getLocation();
+    sceneRoot.setLocationMarker(loc.latDeg, loc.lonDeg);
+  }
+
+  // ---------------- mode machine ----------------
+  const btnModeNow = document.getElementById('btn-mode-now') as HTMLButtonElement;
+  const btnModeExplore = document.getElementById('btn-mode-explore') as HTMLButtonElement;
+
+  // In NOW mode the secondary instrument panels (Kp/X-ray/flares) move to the
+  // right column under the location record, compacted; EXPLORE restores them.
+  const relocateSecondaryPanels = (m: UiMode): void => {
+    if (document.body.classList.contains('mobile')) return; // bottom sheet owns these nodes
+    const ids = ['kp-panel', 'xray-panel', 'flares-panel'];
+    const host = m === 'now' ? document.getElementById('panel-right')! : document.getElementById('panel-left')!;
+    for (const id of ids) {
+      const elPanel = document.getElementById(id)!;
+      elPanel.classList.toggle('compact', m === 'now');
+      host.appendChild(elPanel);
+    }
+  };
+
+  let mobileUi: MobileUi | null = null;
+
+  const setMode = (m: UiMode): void => {
+    mode = m;
+    mobileUi?.syncMode(m);
+    document.body.classList.toggle('mode-now', m === 'now');
+    document.body.classList.toggle('mode-explore', m === 'explore');
+    btnModeNow.classList.toggle('active', m === 'now');
+    btnModeExplore.classList.toggle('active', m === 'explore');
+    relocateSecondaryPanels(m);
+    if (m === 'now') {
+      // NOW is strictly real data pinned to wall-clock time
+      if (provider.activeScenario) {
+        provider.clearScenario();
+        logEvent(Date.now(), 'SCENARIO DEACTIVATED — RETURNING TO NOW');
+      }
+      clock.setPlaying(true);
+      clock.setTime(Date.now());
+      const loc = dashboard.getLocation();
+      sceneRoot.focusOnLatLon(loc.latDeg, loc.lonDeg, {
+        tiltDeg: magneticLatDeg(loc.latDeg, loc.lonDeg) >= 0 ? 18 : -18,
+      });
+    } else {
+      timeline.focus(Date.now() - 5 * 86400000, Date.now() + 5 * 86400000);
+      timeline.markDirty(); // canvas was display:none; the window-resize hook won't fire
+    }
+  };
+  btnModeNow.addEventListener('click', () => setMode('now'));
+  btnModeExplore.addEventListener('click', () => setMode('explore'));
+
+  mobileUi = mountMobileUI({ setMode, getMode: () => mode });
 
   // ---------------- playback controls ----------------
   const btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
@@ -106,6 +186,7 @@ async function boot(): Promise<void> {
   timeline.onViewChange();
 
   window.addEventListener('keydown', (e) => {
+    if (mode === 'now') return; // playback only exists in explore mode
     if (e.code === 'Space' && !(e.target instanceof HTMLButtonElement)) {
       e.preventDefault();
       btnPlay.click();
@@ -122,6 +203,7 @@ async function boot(): Promise<void> {
   const refreshOvation = async () => {
     try {
       const grid = await fetchOvation();
+      ovationGrid = grid;
       sceneRoot.aurora.setOvation(grid);
       provider.ovationReady = true;
     } catch {
@@ -146,9 +228,9 @@ async function boot(): Promise<void> {
 
   // ?scenario=carrington-1859 activates a scenario at its historical date,
   // parked at peak drama (&now=1 anchors it at wall-clock now instead)
-  const scenarioParam = new URLSearchParams(location.search).get('scenario');
+  const scenarioParam = params.get('scenario');
   if (scenarioParam) {
-    const atNow = new URLSearchParams(location.search).has('now');
+    const atNow = params.has('now');
     const sc = SCENARIOS.find((s) => s.id === scenarioParam);
     if (sc) {
       const anchor = atNow || !sc.historicalDateIso ? Date.now() : Date.parse(sc.historicalDateIso);
@@ -157,6 +239,18 @@ async function boot(): Promise<void> {
       clock.setTime(anchor + peak.h * 3600000);
       timeline.focus(anchor - 12 * 3600000, anchor + sc.durationH * 3600000);
     }
+  }
+
+  // explorer intents (?scenario / ?t / ?explore) boot into explore; default is NOW
+  setMode(scenarioParam || tParam || params.has('explore') ? 'explore' : 'now');
+
+  // first visit with no chosen location: ask once, in the background
+  if (!locationFromUrl() && (loadStoredLocation()?.source ?? 'default') === 'default') {
+    requestGeolocation()
+      .then((geo) => {
+        if (geo) dashboard.setLocation(geo);
+      })
+      .catch(() => undefined);
   }
 
   logEvent(clock.timeMs, 'SOLARIS ONLINE — TRACKING SOLAR ACTIVITY');
@@ -171,7 +265,8 @@ async function boot(): Promise<void> {
     const realDt = Math.min(100, nowReal - lastReal);
     lastReal = nowReal;
 
-    clock.tick(realDt);
+    if (mode === 'now') clock.setTime(Date.now()); // pinned to wall clock
+    else clock.tick(realDt);
     const t = clock.timeMs;
 
     let state = provider.auroraStateAt(t);
@@ -194,9 +289,12 @@ async function boot(): Promise<void> {
     updateClock(t);
     updateBadge(resolveMode(t, state));
     updatePanels(t, provider, state, archive.cycle);
+    dashboard.update(t);
 
-    if (clock.playing) timeline.followPlayhead();
-    timeline.draw();
+    if (mode === 'explore') {
+      if (clock.playing) timeline.followPlayhead();
+      timeline.draw();
+    }
 
     sceneRoot.render();
   });

@@ -3,20 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="SOLARIS — solar flare & aurora simulator. Historical space weather 2010–present, legendary storms, and forecasts rendered as auroras over a 3D Earth." />
-  <title>SOLARIS // Solar Flare Simulator</title>
+  <meta name="description" content="SOLARIS — will you see the aurora tonight? Live aurora chances for your location, the next 24 hours and 7 days, plus historical space weather 2010–present and legendary storm scenarios on a 3D Earth." />
+  <title>SOLARIS // Aurora Now</title>
 </head>
 <body>
   <canvas id="scene"></canvas>
 
   <div id="hud">
     <header id="topbar" class="panel">
-      <div id="title">SOLARIS<span class="dim">&nbsp;//&nbsp;SOLAR FLARE SIMULATOR</span></div>
+      <div id="title">SOLARIS<span class="dim">&nbsp;//&nbsp;AURORA NOW</span></div>
+      <div id="mode-toggle">
+        <button id="btn-mode-now" class="active">NOW</button>
+        <button id="btn-mode-explore">EXPLORE</button>
+      </div>
+      <button id="loc-chip" title="change location">⌖ ---</button>
       <div id="sim-clock">---------- --:--:-- UTC</div>
       <div id="mode-badge" class="badge">INIT</div>
     </header>
 
     <aside id="panel-left">
+      <section class="panel now-only" id="now-panel">
+        <h2>AURORA NOW // <span id="now-loc-label"></span></h2>
+        <div id="now-verdict" class="big-readout">–</div>
+        <div id="now-verdict-sub" class="sub-readout"></div>
+        <div id="now-numbers">
+          <div>KP NOW <b id="now-kp">–</b></div>
+          <div>NEED <b id="now-kp-horizon">–</b> HORIZON · <b id="now-kp-overhead">–</b> OVERHEAD</div>
+          <div>OVATION NOWCAST <b id="now-ovation">–</b></div>
+        </div>
+      </section>
+      <section class="panel now-only" id="next24-panel">
+        <h2>NEXT 24H // LOCAL</h2>
+        <canvas id="strip24" width="280" height="56"></canvas>
+        <div id="strip24-best" class="sub-readout"></div>
+      </section>
+      <section class="panel now-only" id="week-panel">
+        <h2>NEXT 7 DAYS</h2>
+        <canvas id="week-bars" width="280" height="84"></canvas>
+      </section>
       <section class="panel" id="kp-panel">
         <h2>GEOMAGNETIC // Kp</h2>
         <div id="kp-gauge"></div>
@@ -36,15 +60,23 @@
     </aside>
 
     <aside id="panel-right">
-      <section class="panel" id="log-panel">
+      <section class="panel now-only" id="history-panel">
+        <h2>THIS LOCATION // RECORD</h2>
+        <dl id="loc-stats">
+          <dt>LAST VISIBLE</dt><dd id="stat-last">–</dd>
+          <dt>STRONGEST SINCE 2010</dt><dd id="stat-strongest">–</dd>
+          <dt>NEXT PREDICTED</dt><dd id="stat-next">–</dd>
+        </dl>
+      </section>
+      <section class="panel explore-only" id="log-panel">
         <h2>EVENT LOG</h2>
         <ul id="event-log"></ul>
       </section>
-      <section class="panel" id="cycle-panel">
+      <section class="panel explore-only" id="cycle-panel">
         <h2>SOLAR CYCLE // SSN</h2>
         <canvas id="cycle-spark" width="240" height="60"></canvas>
       </section>
-      <section class="panel" id="scenario-panel">
+      <section class="panel explore-only" id="scenario-panel">
         <h2>SCENARIOS</h2>
         <div id="scenario-buttons"></div>
       </section>
@@ -65,6 +97,12 @@
         <span id="aurora-source" class="dim"></span>
       </div>
     </footer>
+
+    <div id="loc-popover" class="panel" hidden>
+      <button id="loc-use-geo">⌖ USE MY LOCATION</button>
+      <input id="loc-input" placeholder="city or lat, lon" autocomplete="off" spellcheck="false" />
+      <ul id="loc-suggest"></ul>
+    </div>
   </div>
 
   <div id="scanlines"></div>

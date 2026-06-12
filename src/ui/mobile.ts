@@ -1,7 +1,11 @@
 // Mobile mode: touch detection + a phone-sized HUD. The desktop side-panel
-// columns collapse into a tabbed bottom sheet (DATA / LOG / SCENARIOS) so every
-// readout stays reachable without permanently covering the globe. Layout rules
-// live in hud.css under `body.mobile`.
+// columns collapse into a tabbed bottom sheet (NOW / WEEK / DATA / EXPLORE) so
+// every readout stays reachable without permanently covering the globe. Each
+// tab carries a UI mode: picking NOW/WEEK/DATA pins the app to wall-clock now,
+// EXPLORE reveals the timeline + transport. Layout rules live in hud.css under
+// `body.mobile`.
+
+import type { UiMode } from '../main';
 
 export function isMobileDevice(): boolean {
   const coarse = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
@@ -11,15 +15,26 @@ export function isMobileDevice(): boolean {
   return coarse && small;
 }
 
-const TABS: Array<{ id: string; label: string; panels: string[] }> = [
-  { id: 'data', label: 'DATA', panels: ['kp-panel', 'xray-panel', 'flares-panel'] },
-  { id: 'log', label: 'LOG', panels: ['log-panel', 'cycle-panel'] },
-  { id: 'scn', label: 'SCENARIOS', panels: ['scenario-panel'] },
+const TABS: Array<{ id: string; label: string; mode: UiMode; panels: string[] }> = [
+  { id: 'now', label: 'NOW', mode: 'now', panels: ['now-panel', 'next24-panel', 'history-panel'] },
+  { id: 'week', label: 'WEEK', mode: 'now', panels: ['week-panel'] },
+  { id: 'data', label: 'DATA', mode: 'now', panels: ['kp-panel', 'xray-panel', 'flares-panel'] },
+  { id: 'xpl', label: 'EXPLORE', mode: 'explore', panels: ['scenario-panel', 'log-panel', 'cycle-panel'] },
 ];
 
-/** Rebuild the HUD for touch. No-op (returns false) on non-mobile devices. */
-export function mountMobileUI(): boolean {
-  if (!isMobileDevice()) return false;
+export interface MobileDeps {
+  setMode(m: UiMode): void;
+  getMode(): UiMode;
+}
+
+export interface MobileUi {
+  /** Keep the tab state consistent when the mode is changed from outside (boot, URL params). */
+  syncMode(m: UiMode): void;
+}
+
+/** Rebuild the HUD for touch. No-op (returns null) on non-mobile devices. */
+export function mountMobileUI(deps: MobileDeps): MobileUi | null {
+  if (!isMobileDevice()) return null;
   document.body.classList.add('mobile');
 
   const bottom = document.getElementById('bottom')!;
@@ -41,6 +56,9 @@ export function mountMobileUI(): boolean {
       }
     }
     sheet.classList.toggle('open', id !== null);
+    // a tab carries a mode; closing the sheet leaves the mode unchanged
+    const tab = TABS.find((t) => t.id === id);
+    if (tab && deps.getMode() !== tab.mode) deps.setMode(tab.mode);
   };
 
   for (const tab of TABS) {
@@ -61,5 +79,15 @@ export function mountMobileUI(): boolean {
     if (e.target instanceof HTMLButtonElement) select(null);
   });
 
-  return true;
+  return {
+    syncMode(m: UiMode): void {
+      const activeTab = TABS.find((t) => t.id === active);
+      if (m === 'now') {
+        // boot / return to now: lead with the verdict sheet
+        if (!activeTab || activeTab.mode !== 'now') select('now');
+      } else if (activeTab && activeTab.mode !== 'explore') {
+        select(null); // explore from outside (e.g. ?scenario): show globe + timeline
+      }
+    },
+  };
 }

@@ -20,6 +20,8 @@ export class SceneRoot {
   readonly aurora: Aurora;
   readonly sunFx: SunFx;
   private sunDir = new THREE.Vector3(1, 0, 0);
+  private marker: THREE.Sprite | null = null;
+  private focusTarget: THREE.Vector3 | null = null;
 
   constructor(canvas: HTMLCanvasElement, dayTex: THREE.Texture, nightTex: THREE.Texture) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -60,6 +62,50 @@ export class SceneRoot {
     this.scene.add(this.sunFx.sprite);
 
     window.addEventListener('resize', () => this.onResize());
+    // user grabbing the globe cancels any in-flight camera focus animation
+    this.controls.addEventListener('start', () => {
+      this.focusTarget = null;
+    });
+  }
+
+  /** Place (or move) the user-location marker on the globe surface. */
+  setLocationMarker(latDeg: number, lonDeg: number): void {
+    if (!this.marker) {
+      const size = 64;
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d')!;
+      const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      grad.addColorStop(0, 'rgba(234,255,255,1)');
+      grad.addColorStop(0.25, 'rgba(0,229,255,0.9)');
+      grad.addColorStop(0.6, 'rgba(0,229,255,0.25)');
+      grad.addColorStop(1, 'rgba(0,229,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, size, size);
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+      });
+      this.marker = new THREE.Sprite(mat);
+      this.marker.scale.setScalar(0.05);
+      this.marker.renderOrder = 3;
+      this.scene.add(this.marker);
+    }
+    latLonToVec3(latDeg, lonDeg, this.marker.position).multiplyScalar(1.012);
+  }
+
+  /**
+   * Ease the camera to frame a location. Pass a signed tiltDeg (+ for NH, − for
+   * SH) to sit equatorward of the spot looking poleward, putting the auroral
+   * oval in frame above it.
+   */
+  focusOnLatLon(latDeg: number, lonDeg: number, opts?: { tiltDeg?: number; distance?: number }): void {
+    const tilt = opts?.tiltDeg ?? 18;
+    const aimLat = THREE.MathUtils.clamp(latDeg + tilt, -80, 80);
+    this.focusTarget = latLonToVec3(aimLat, lonDeg).multiplyScalar(opts?.distance ?? 2.9);
   }
 
   private onResize(): void {
@@ -81,6 +127,10 @@ export class SceneRoot {
   }
 
   render(): void {
+    if (this.focusTarget) {
+      this.camera.position.lerp(this.focusTarget, 0.05);
+      if (this.camera.position.distanceTo(this.focusTarget) < 0.01) this.focusTarget = null;
+    }
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
