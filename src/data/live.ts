@@ -47,7 +47,14 @@ export async function fetchLiveKp(): Promise<LiveKpSample[]> {
   const res = await fetch(`${SWPC}/json/planetary_k_index_1m.json`);
   if (!res.ok) throw new Error(`Kp HTTP ${res.status}`);
   const json = (await res.json()) as { time_tag: string; estimated_kp: number }[];
-  return json.map((r) => ({ tMs: Date.parse(r.time_tag + (r.time_tag.endsWith('Z') ? '' : 'Z')), kp: r.estimated_kp }));
+  const samples = json.map((r) => ({ tMs: Date.parse(r.time_tag + (r.time_tag.endsWith('Z') ? '' : 'Z')), kp: r.estimated_kp }));
+  // NOAA publishes 0 placeholders for the newest minute(s) before the estimate
+  // lands; a real estimate can't step to exactly 0, so trim trailing zeros
+  // (a genuinely quiet feed loses nothing — its neighbours are ~0 anyway)
+  if (samples.some((s) => s.kp > 0)) {
+    while (samples.length > 0 && samples[samples.length - 1].kp === 0) samples.pop();
+  }
+  return samples;
 }
 
 export interface XraySample { tMs: number; flux: number }
