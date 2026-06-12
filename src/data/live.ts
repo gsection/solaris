@@ -48,9 +48,28 @@ export async function fetchLiveKp(): Promise<LiveKpSample[]> {
   if (!res.ok) throw new Error(`Kp HTTP ${res.status}`);
   const json = (await res.json()) as { time_tag: string; estimated_kp: number }[];
   const samples = json.map((r) => ({ tMs: Date.parse(r.time_tag + (r.time_tag.endsWith('Z') ? '' : 'Z')), kp: r.estimated_kp }));
-  // NOAA publishes 0 placeholders for the newest minute(s) before the estimate
-  // lands; a real estimate can't step to exactly 0, so trim trailing zeros
-  // (a genuinely quiet feed loses nothing — its neighbours are ~0 anyway)
+  // estimated_kp restarts near 0 at every 3-h Kp interval boundary and ramps
+  // back up as the interval accumulates data (observed: 3.33 -> 0 at 09:00 UT
+  // sharp). Floor the first hour of each interval with the previous interval's
+  // final estimate, fading linearly, so the series doesn't crater every 3 h.
+  const INTERVAL_MS = 3 * 3600000;
+  const RAMP_MS = 3600000;
+  let curInterval = NaN;
+  let prevFinal = NaN;
+  let lastKp = NaN;
+  for (const s of samples) {
+    const interval = Math.floor(s.tMs / INTERVAL_MS);
+    if (interval !== curInterval) {
+      prevFinal = lastKp;
+      curInterval = interval;
+    }
+    const age = s.tMs - interval * INTERVAL_MS;
+    if (Number.isFinite(prevFinal) && age < RAMP_MS) {
+      s.kp = Math.max(s.kp, prevFinal * (1 - age / RAMP_MS));
+    }
+    lastKp = s.kp;
+  }
+  // trailing 0 placeholders for the newest minute(s) (before any estimate lands)
   if (samples.some((s) => s.kp > 0)) {
     while (samples.length > 0 && samples[samples.length - 1].kp === 0) samples.pop();
   }
